@@ -6,12 +6,13 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { formatDate } from '../utils/date.util';
 
 export interface ResponseFormat<T> {
   code: number;
   message: string;
   data: T;
-  timestamp: number;
+  timestamp: string;
 }
 
 @Injectable()
@@ -24,10 +25,10 @@ export class TransformInterceptor<T>
   ): Observable<ResponseFormat<T>> {
     return next.handle().pipe(
       map((data) => ({
-        code: 0,
+        code: 200,
         message: 'success',
         data,
-        timestamp: Date.now(),
+        timestamp: formatDate(),
       })),
     );
   }

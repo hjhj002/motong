@@ -3,44 +3,196 @@
 
 generator client {
   provider = "prisma-client"
-  output   = "../generated/prisma"
+  output   = "../libs/share/src/prisma/generated"
 }
 
 datasource db {
   provider = "postgresql"
 }
 
+// ================= 枚举定义 (Enums) =================
+
+/// 性别
+enum Gender {
+  MALE    /// 男
+  FEMALE  /// 女
+  UNKNOWN /// 未知/保密
+}
+
+/// 用户账号状态
+enum UserStatus {
+  NORMAL   /// 正常：账号状态良好
+  DISABLED /// 禁用：被管理员封禁
+  LOCKED   /// 锁定：因安全原因临时锁定
+}
+
+/// 用户角色权限
+enum UserRole {
+  ADMIN  /// 管理员：拥有系统最高权限
+  EDITOR /// 编辑：可管理文章和分类
+  USER   /// 普通用户：默认角色
+}
+
+/// 招募需求状态
+enum RequestStatus {
+  ACTIVE  /// 招募中：等待搭子申请
+  MATCHED /// 已匹配：已找到搭子
+  CLOSED  /// 已关闭：主动关闭需求
+}
+
+/// 申请状态
+enum ApplyStatus {
+  PENDING  /// 待处理：等待发布者审核
+  APPROVED /// 已同意：双方建立搭子关系
+  REJECTED /// 已拒绝：发布者拒绝申请
+}
+
+/// 搭子关系状态
+enum RelationStatus {
+  ACTIVE     /// 正常搭子中：互相监督学习
+  EXPIRED    /// 已到期：约定周期结束自然解散
+  TERMINATED /// 提前解除：一方主动解除关系
+}
+
+
+// ================= 用户模块 =================
+
+/// 用户主表：存储用户核心账号信息及基础资料
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  name      String?
-  posts     Post[]
-  profile   Profile?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          Int        @id @default(autoincrement()) /// 用户唯一标识ID
+  email       String     @unique @db.VarChar(255)      /// 邮箱地址，用于登录和找回密码
+  phone       String?    @unique @db.VarChar(20)       /// 手机号，用于快捷登录和安全验证
+  username    String     @unique @db.VarChar(50)       /// 登录用户名，注册后不可修改
+  password    String     @db.VarChar(255)              /// 加密后的密码（推荐bcrypt）
+  nickname    String?    @db.VarChar(50)               /// 展示昵称，用于社区和搭子页面
+  avatar      String?    @db.Text                      /// 头像图片URL，支持OSS/CDN地址
+  gender      Gender?                                  /// 性别，用于搭子匹配时的偏好筛选
+  birthday    DateTime?                                /// 出生日期，可用于年龄展示或星座匹配
+  status      UserStatus @default(NORMAL)              /// 账号状态，默认正常
+  role        UserRole   @default(USER)                /// 用户角色，决定可访问的功能和接口权限
+  address     String?    @db.Text                      /// 地址信息，可用于线下自习室搭子的同城匹配
+  remark      String?    @db.Text                      /// 管理员备注，用于记录违规或特殊标记
+  lastLoginAt DateTime?                                /// 最后登录时间，用于活跃度分析
+
+  // ========== 关联关系 ==========
+  profile        Profile?             /// 用户详细资料（一对一）
+  posts          Post[]               /// 用户发布的社区文章列表
+  
+  // ========== 学习搭子业务关联 ==========
+  buddyRequests  BuddyRequest[]       /// 我发布的搭子招募需求列表
+  applications   BuddyApplication[]   @relation("Applicant") /// 我发出的搭子申请记录
+  
+  // ========== 搭子关系（双向） ==========
+  relationsA     BuddyRelation[]      @relation("UserABuddy") /// 作为用户A的搭子关系记录
+  relationsB     BuddyRelation[]      @relation("UserBBuddy") /// 作为用户B的搭子关系记录
+
+  createdAt      DateTime             @default(now()) /// 注册时间
+  updatedAt      DateTime             @updatedAt      /// 信息最后更新时间
+  deletedAt      DateTime?                            /// 软删除时间，非空表示已注销/删除
 }
 
+/// 用户扩展资料表（一对一）：存储非核心的个人资料和学习偏好
 model Profile {
-  id     Int     @id @default(autoincrement())
-  bio    String?
-  userId Int     @unique
-  user   User    @relation(fields: [userId], references: [id])
+  id          Int     @id @default(autoincrement()) /// 资料记录ID
+  bio         String? @db.Text        /// 个人简介，展示在个人主页
+  signature   String? @db.VarChar(200)/// 个性签名，简短的自我表达
+  hobby       String? @db.Text        /// 兴趣爱好，用于搭子匹配时的共同话题
+  
+  // ========== 学习搭子专属扩展字段 ==========
+  studyGoal   String? @db.VarChar(100) /// 当前学习目标（如：考研、雅思、考公）
+  studyTag    String? @db.VarChar(100) /// 学习状态标签（如：早起鸟、夜猫子、番茄钟）
+  stage       String? @db.VarChar(50)  /// 当前阶段（如：大一、研二、在职）
+
+  userId      Int     @unique          /// 关联用户ID，一对一关系
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade) /// 所属用户，用户删除时级联删除资料
 }
 
+
+// ================= 社区/文章模块 =================
+
+/// 文章表：社区内容发布，用于经验分享、打卡记录等
 model Post {
-  id         Int        @id @default(autoincrement())
-  title      String
-  content    String?
-  published  Boolean    @default(false)
-  author     User       @relation(fields: [authorId], references: [id])
-  authorId   Int
-  categories Category[]
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id         Int        @id @default(autoincrement()) /// 文章ID
+  title      String     @db.VarChar(200)              /// 文章标题
+  content    String?    @db.Text                      /// 文章正文，支持Markdown格式
+  coverImg   String?    @db.Text                      /// 封面图URL，用于列表页展示
+  published  Boolean    @default(false)               /// 发布状态，false为草稿，true为已发布
+  
+  author     User       @relation(fields: [authorId], references: [id], onDelete: Cascade) /// 文章作者
+  authorId   Int                                        /// 作者用户ID
+  
+  categories Category[]                                /// 文章所属分类（多对多关系）
+  
+  createdAt  DateTime   @default(now())                /// 创建时间
+  updatedAt  DateTime   @updatedAt                     /// 最后编辑时间
+  deletedAt  DateTime?                                 /// 软删除时间
 }
 
+/// 文章分类表：用于文章内容的归类管理
 model Category {
-  id    Int    @id @default(autoincrement())
-  name  String @unique
-  posts Post[]
+  id    Int    @id @default(autoincrement()) /// 分类ID
+  name  String @unique @db.VarChar(100)     /// 分类名称，全局唯一
+  desc  String? @db.Text                    /// 分类描述，用于SEO和前端展示
+  posts Post[]                              /// 该分类下的文章列表
+}
+
+
+// ================= 学习搭子核心业务模块 =================
+
+/// 搭子需求/招募表：用户发布的寻找学习搭子的帖子
+model BuddyRequest {
+  id        Int           @id @default(autoincrement()) /// 招募ID
+  title     String        @db.VarChar(200)              /// 招募标题（如：寻考研英语搭子）
+  content   String?       @db.Text                      /// 详细要求（作息时间、性格要求等）
+  status    RequestStatus @default(ACTIVE)              /// 招募状态，默认招募中
+  
+  author    User          @relation(fields: [authorId], references: [id], onDelete: Cascade) /// 发布者
+  authorId  Int                                            /// 发布者用户ID
+  
+  tags      BuddyTag[]                                    /// 关联标签（多对多），用于筛选和推荐
+  applications BuddyApplication[]                         /// 收到的搭子申请列表
+  
+  createdAt DateTime      @default(now())                 /// 发布时间
+  updatedAt DateTime      @updatedAt                      /// 最后更新时间
+  deletedAt DateTime?                                     /// 软删除时间
+}
+
+/// 搭子标签表：用于给招募需求打标签，支持多维度筛选
+model BuddyTag {
+  id       Int            @id @default(autoincrement()) /// 标签ID
+  name     String         @unique @db.VarChar(50)       /// 标签名称，全局唯一（如：#考研 #早起）
+  requests BuddyRequest[]                               /// 使用该标签的招募需求列表
+}
+
+/// 搭子申请表：用户对某条招募需求发起的申请记录
+model BuddyApplication {
+  id          Int         @id @default(autoincrement()) /// 申请ID
+  message     String?     @db.Text                      /// 申请留言（如：我作息很规律）
+  status      ApplyStatus @default(PENDING)             /// 申请状态，默认为待处理
+  
+  applicant   User        @relation("Applicant", fields: [applicantId], references: [id], onDelete: Cascade) /// 申请人
+  applicantId Int                                            /// 申请人用户ID
+  
+  request     BuddyRequest @relation(fields: [requestId], references: [id], onDelete: Cascade) /// 申请的招募需求
+  requestId   Int                                            /// 招募需求ID
+  
+  createdAt   DateTime    @default(now())                 /// 申请时间
+  updatedAt   DateTime    @updatedAt                      /// 状态变更时间
+}
+
+/// 搭子关系表：双方同意后建立的正式搭子关系
+model BuddyRelation {
+  id        Int            @id @default(autoincrement()) /// 关系ID
+  
+  userA     User           @relation("UserABuddy", fields: [userAId], references: [id], onDelete: Cascade) /// 搭子A（发起申请方）
+  userAId   Int                                            /// 用户A的ID
+  
+  userB     User           @relation("UserBBuddy", fields: [userBId], references: [id], onDelete: Cascade) /// 搭子B（接受申请方）
+  userBId   Int                                            /// 用户B的ID
+  
+  status    RelationStatus @default(ACTIVE)               /// 关系状态，默认正常搭子中
+  
+  createdAt DateTime       @default(now())                /// 关系建立时间
+  
+  @@unique([userAId, userBId]) /// 联合唯一索引，保证两人之间只有一条关系记录
 }

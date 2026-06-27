@@ -1,17 +1,17 @@
 {
   "$schema": "https://json.schemastore.org/nest-cli",
   "collection": "@nestjs/schematics",
-  "sourceRoot": "apps/mo-tong/src",
+  "sourceRoot": "apps/mo-tong-api/src",
   "compilerOptions": {
     "deleteOutDir": true,
-    "webpack": true,
-    "tsConfigPath": "apps/mo-tong/tsconfig.app.json"
+    "webpack": false,
+    "tsConfigPath": "apps/mo-tong-api/tsconfig.app.json"
   },
   "generateOptions": {
     "spec": false
   },
   "monorepo": true,
-  "root": "apps/mo-tong",
+  "root": "apps/mo-tong-api",
   "projects": {
     "ai": {
       "type": "application",
@@ -22,13 +22,13 @@
         "tsConfigPath": "apps/ai/tsconfig.app.json"
       }
     },
-    "mo-tong": {
+    "mo-tong-api": {
       "type": "application",
-      "root": "apps/mo-tong",
+      "root": "apps/mo-tong-api",
       "entryFile": "main",
-      "sourceRoot": "apps/mo-tong/src",
+      "sourceRoot": "apps/mo-tong-api/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/mo-tong/tsconfig.app.json"
+        "tsConfigPath": "apps/mo-tong-api/tsconfig.app.json"
       }
     },
     "share": {
