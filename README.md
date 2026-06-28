@@ -216,6 +216,3 @@ http://localhost:3000/api-docs
 - **角色权限控制**：`@Roles()` 装饰器实现接口级权限
 - **软删除支持**：用户、文章等核心数据支持逻辑删除
 
-## License
-
-UNLICENSED - 私有项目
