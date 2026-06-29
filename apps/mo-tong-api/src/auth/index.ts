@@ -6,5 +6,5 @@ export * from './guards/roles.guard';
 export * from './decorators/public.decorator';
 export * from './decorators/roles.decorator';
 export * from './decorators/current-user.decorator';
-export * from './dto/login.dto';
-export * from './dto/register.dto';
+export * from '../../../../libs/share/src/prisma/models/auth/dto/login.dto';
+export * from '../../../../libs/share/src/prisma/models/auth/dto/register.dto';
